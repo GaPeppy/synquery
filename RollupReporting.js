@@ -1,7 +1,9 @@
-
+const GBatchID = Date.now()
 const assert = require('assert')
 const GCredArray = $secure.MASTER_ACCOUNT_CONTEXT_USER_KEY_CSV.split(',')
-const GBatchID = Date.now()
+const GPOA_ACCOUNT_ID = $secure.POA_ACCOUNT_ID
+const GPOA_INGEST_KEY = $secure.POA_INGEST_KEY
+const GRollupTable = 'NrEntityRollupUsage'
 
 //
 // function definitions
@@ -80,7 +82,7 @@ function GetAccounts(sCred){
 //
 // GetCounts() -> run parallel queries for a target subaccount
 //
-function GetCounts(sCred,oAcct){
+function GetCounts(sCred,oAcct,nBatchID){
     const CQuery = `
 {
   actor {
@@ -123,7 +125,7 @@ function GetCounts(sCred,oAcct){
     return new Promise((resolve,reject)=>{
       try{
         var cres = {}
-        cres.ucresult = {NrAccountId:oAcct.id, NrAccountName:oAcct.name, ReportingPeriod:'1d', BatchId:GBatchID.toString()}
+        cres.ucresult = {NrAccountId:oAcct.id, NrAccountName:oAcct.name, ReportingPeriod:'1d', BatchId:nBatchID.toString()}
         cres.ucresult.LambdaServerlessUC = payload.data.actor.account.lambdauc.results[0].uc
         cres.ucresult.EC2HostUC = payload.data.actor.account.ec2uc.results[0].uc
         cres.ucresult["CloudIntegrations.LinkedAccounts.Count"] = payload.data.actor.account.cloud.linkedAccounts.length
@@ -151,10 +153,10 @@ function GetCounts(sCred,oAcct){
 //
 // LoopAccounts() -> scatter and gather for current MasterContext; parallel execution
 //
-function LoopAccounts(sCred, aAccounts){
+function LoopAccounts(sCred, aAccounts, nBatchID){
   parray = []
   for(oa of aAccounts){
-    parray.push(GetCounts(sCred,oa))
+    parray.push(GetCounts(sCred,oa,nBatchID))
   }
   return Promise.all(parray)
 }
@@ -169,34 +171,26 @@ function LoopAccountsSerial(sCred, aAccounts){
     })
   }, Promise.resolve());
 }
-//
+
 //stdout logger
-//
 function logit(mname,msg, ...theargs){
   if(mname == null || msg == null){throw('logit(method,msg,...) requires at least 2 params')}
   console.log(`[${(new Date()).toISOString()}]${mname}()-> ${msg}${theargs.length == 0 ? '' : ':'}`,...theargs)
 }
-//
-//
-//
-function ProcessMasterContext(sMasterCred, nBatchID){
+
+function ProcessMasterContext(sMasterCred, nBatchID, sTargetTable){
   return GetAccounts(sMasterCred)
   .then((aAccounts) =>{
     //console.log('GetAccounts() result:',payload)
     logit('ProcessMasterContext','working on number of accounts',aAccounts.length)
-    //logit('ProcessMasterContext','aAccounts',aAccounts)
-    return LoopAccounts(sMasterCred, aAccounts)
+    //logit('main','aAccounts',aAccounts)
+    return LoopAccounts(sMasterCred, aAccounts, nBatchID)
   }).then((aCounts)=>{
-    //
-    // The return structure is an array of response objects that could contain multiple objects in the future
-    //
     var uCounts = []
     aCounts.forEach(el => {uCounts.push(el.ucresult)})
-    //
-    // push array of results in thru Events API
-    return PostEvents($secure.POA_INGEST_KEY,$secure.POA_ACCOUNT_ID,"NrEntityRollupUsage",nBatchID,uCounts)
+    return PostEvents($secure.POA_INGEST_KEY,$secure.POA_ACCOUNT_ID,sTargetTable,nBatchID,uCounts)
     .then((response1)=>{
-      logit('ProcessMasterContext','postevents-response1',response1.statusCode)
+      logit('main','postevents-response1',response1.statusCode)
     })
   }).catch(err => {
     logit('ProcessMasterContext','caught error on promise-chain',err)
@@ -206,16 +200,16 @@ function ProcessMasterContext(sMasterCred, nBatchID){
 
 //force serial processing of Master-Context
 logit('main','starting the run')
-var sTargetTable = 'NrEntityRollupUsage'
+var sTargetTable = GRollupTable
 $util.insights.set('BatchId',GBatchID.toString())
-$util.insights.set('EntityTargetTable','NrEntityRollupUsage')
-ProcessMasterContext(GCredArray[0],GBatchID)
+$util.insights.set('EntityTargetTable',sTargetTable)
+ProcessMasterContext(GCredArray[0],GBatchID, sTargetTable)
 .then(()=>{
   logit('main','stopwatch 0 in secs',(Date.now()-GBatchID)/1000)
-  return ProcessMasterContext(GCredArray[1],GBatchID)
+  return ProcessMasterContext(GCredArray[1],GBatchID,sTargetTable)
 }).then(()=>{
   logit('main','stopwatch 1 in secs',(Date.now()-GBatchID)/1000)
-  return ProcessMasterContext(GCredArray[2],GBatchID)
+  return ProcessMasterContext(GCredArray[2],GBatchID,sTargetTable)
 }).then(()=>{
   logit('main','stopwatch 2 in secs',(Date.now()-GBatchID)/1000)
 })
