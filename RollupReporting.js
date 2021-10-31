@@ -179,6 +179,7 @@ function logit(mname,msg, ...theargs){
 }
 
 function ProcessMasterContext(sMasterCred, nBatchID, sTargetTable){
+  var nstrt = Date.now()
   return GetAccounts(sMasterCred)
   .then((aAccounts) =>{
     //console.log('GetAccounts() result:',payload)
@@ -192,6 +193,8 @@ function ProcessMasterContext(sMasterCred, nBatchID, sTargetTable){
     .then((response1)=>{
       logit('main','postevents-response1',response1.statusCode)
     })
+  }).then(()=>{
+    logit('ProcessMasterContext','iteration stopwatch in secs',(Date.now()-nstrt)/1000)
   }).catch(err => {
     logit('ProcessMasterContext','caught error on promise-chain',err)
     assert.fail(err)
@@ -203,13 +206,10 @@ logit('main','starting the run')
 var sTargetTable = GRollupTable
 $util.insights.set('BatchId',GBatchID.toString())
 $util.insights.set('EntityTargetTable',sTargetTable)
-ProcessMasterContext(GCredArray[0],GBatchID, sTargetTable)
-.then(()=>{
-  logit('main','stopwatch 0 in secs',(Date.now()-GBatchID)/1000)
-  return ProcessMasterContext(GCredArray[1],GBatchID,sTargetTable)
-}).then(()=>{
-  logit('main','stopwatch 1 in secs',(Date.now()-GBatchID)/1000)
-  return ProcessMasterContext(GCredArray[2],GBatchID,sTargetTable)
-}).then(()=>{
-  logit('main','stopwatch 2 in secs',(Date.now()-GBatchID)/1000)
-})
+
+//use reduce() to serialize walking Master Contexts
+GCredArray.reduce(function(pr, sMasterCred) {
+  return pr.then(function() {
+    return ProcessMasterContext(sMasterCred,GBatchID,sTargetTable)
+  })
+}, Promise.resolve())
