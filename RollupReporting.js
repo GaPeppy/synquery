@@ -90,6 +90,9 @@ function GetCounts(sCred,oAcct,nBatchID){
       lambdauc: nrql(query: "SELECT uniqueCount(entityGuid) as uc FROM AwsLambdaInvocation WHERE provider = 'LambdaFunction' SINCE 1 day ago") {
         results
       }
+      lambdaciuc: nrql(query: "SELECT uniqueCount(entityGuid) as uc from ServerlessSample where provider = 'LambdaFunction' SINCE 1 day ago") {
+        results
+      }
       ec2uc: nrql(query: "SELECT uniqueCount(entityGuid) as uc FROM ComputeSample WHERE provider = 'Ec2Instance' SINCE 1 day ago") {
         results
       }
@@ -126,8 +129,9 @@ function GetCounts(sCred,oAcct,nBatchID){
       try{
         var cres = {}
         cres.ucresult = {NrAccountId:oAcct.id, NrAccountName:oAcct.name, ReportingPeriod:'1d', BatchId:nBatchID.toString()}
-        cres.ucresult.LambdaServerlessUC = payload.data.actor.account.lambdauc.results[0].uc
-        cres.ucresult.EC2HostUC = payload.data.actor.account.ec2uc.results[0].uc
+        cres.ucresult["Serverless.Lambda.UCount"] = payload.data.actor.account.lambdauc.results[0].uc
+        cres.ucresult["Cloudwatch.Lambda.UCount"] = payload.data.actor.account.lambdaciuc.results[0].uc
+        cres.ucresult["Cloudwatch.EC2.UCount"] = payload.data.actor.account.ec2uc.results[0].uc
         cres.ucresult["CloudIntegrations.LinkedAccounts.Count"] = payload.data.actor.account.cloud.linkedAccounts.length
         var nServices = 0
         payload.data.actor.account.cloud.linkedAccounts.forEach( el => {
