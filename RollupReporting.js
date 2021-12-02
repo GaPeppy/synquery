@@ -1,5 +1,6 @@
 const GBatchID = Date.now()
 const assert = require('assert')
+const zlib = require('zlib')
 const GCredArray = $secure.MASTER_ACCOUNT_CONTEXT_USER_KEY_CSV.split(',')
 const GPOA_ACCOUNT_ID = $secure.POA_ACCOUNT_ID
 const GPOA_INGEST_KEY = $secure.POA_INGEST_KEY
@@ -13,7 +14,7 @@ const GRollupTable = 'NrEntityRollupUsage'
 ////
 function NerdGraph(sngcred,squery,svar){
   return new Promise((resolve, reject) => {
-    const options = {url: 'https://api.newrelic.com/graphql', gzip:true, body:{query:squery,variables:svar}, json:true, headers:{'Api-key':sngcred}}
+    const options = {url: 'https://api.newrelic.com/graphql', body:{query:squery,variables:svar}, json:true, headers:{'Api-key':sngcred}}
     //logit('NerdGraph','options',options)
     $http.post(options, (err,response,body) => {
       if (err) {
@@ -34,23 +35,35 @@ function CaptureCustomAttribute(sMCred,sTag,sValue){
   $util.insights.set('MasterCred.' + sTag + '.' + sMCred.substring(0,10), sValue)
 }
 //
-// PostEvents() -> Push results into custom Event Table
 //
-function PostEvents(sCred,sTargetAcctId,sTable,ntimestamp,aEvents){
+//
+function zippayload(sTable,ntimestamp,aEvents){
   return new Promise((resolve, reject) => {
-    if(!Array.isArray(aEvents) || aEvents.length == 0){var response = {statusCode:599}; return resolve(response)}
-    logit('PostEvents','about to create number of events',aEvents.length,sTable)
-    for (oa of aEvents){
+    if(!Array.isArray(aEvents) || aEvents.length == 0){return reject('array is empty')}
+    logit('zippayload','about to create number of events',aEvents.length,sTable)
+    for (var oa of aEvents){
       oa.eventType = sTable
       oa.timestamp = ntimestamp
     }
-    const options = {url: `https://insights-collector.newrelic.com/v1/accounts/${sTargetAcctId}/events`, gzip:true, body:aEvents, json:true, headers:{'Api-key':sCred}}
+    zlib.gzip(JSON.stringify(aEvents), null, function (err, compressed_json) {
+      if(err) {logit('zippayload','gzip bombed',err); return reject(err)}
+      logit('zippayload','compressed size',compressed_json.byteLength)
+      return resolve(compressed_json)
+    })
+  })
+}
+//
+// PostZipEvents() -> Push results into custom Event Table
+//
+function PostZipEvents(sCred,sTargetAcctId,zippedpl){
+  return new Promise((resolve, reject) => {
+    const options = {url: `https://insights-collector.newrelic.com/v1/accounts/${sTargetAcctId}/events`,
+                     body:zippedpl,
+                     headers:{'Content-Encoding': 'gzip','Api-key':sCred}}
     //debug line
     //logit('PostEvents','options',options)
     $http.post(options, (err,response,body) => {
-      if (err) {
-        return reject(err)
-      }
+      if (err) {logit('PostZipEvents','$http.post bombed',err);return reject(err)}
       if (response.statusCode < 200 || response.statusCode > 299) {
         return reject('Failed to load page, status code: ' + response.statusCode);
       }
@@ -89,7 +102,7 @@ function GetCounts(sCred,oAcct,nBatchID){
     dbcount: entitySearch(query: "type = 'DASHBOARD' and accountId = 'RPMID'") {
       count
     }
-    iacount: entitySearch(query: "type = 'HOST' and accountId = 'RPMID'") {
+    iacount: entitySearch(query: "type = 'HOST' and accountId = 'RPMID'  and reporting = 'true'") {
       count
     }
     account(id: RPMID) {
@@ -100,6 +113,9 @@ function GetCounts(sCred,oAcct,nBatchID){
         results
       }
       ec2uc: nrql(query: "SELECT uniqueCount(entityGuid) as uc FROM ComputeSample WHERE provider = 'Ec2Instance' SINCE 1 day ago") {
+        results
+      }
+      iauc: nrql(query: "SELECT uniqueCount(entityGuid) as uc FROM SystemSample SINCE 1 day ago") {
         results
       }
       aiiopenuc: nrql(query: "SELECT uniqueCount(incidentId) as uc from NrAiIncident where event = 'open' since 1 day ago") {
@@ -141,13 +157,14 @@ function GetCounts(sCred,oAcct,nBatchID){
       try{
         var cres = {}
         cres.ucresult = {NrAccountId:oAcct.id, NrAccountName:oAcct.name, ReportingPeriod:'1d', BatchId:nBatchID.toString()}
-        cres.ucresult["Dashboard.Count"] = payload.data.actor.dbcount.count
-        cres.ucresult["InfraAgent.Count"] = payload.data.actor.iacount.count
-        cres.ucresult["Serverless.Lambda.UCount"] = payload.data.actor.account.lambdauc.results[0].uc
-        cres.ucresult["Cloudwatch.Lambda.UCount"] = payload.data.actor.account.lambdaciuc.results[0].uc
-        cres.ucresult["Cloudwatch.EC2.UCount"] = payload.data.actor.account.ec2uc.results[0].uc
-        cres.ucresult["Incident.Open.UCount"] = payload.data.actor.account.aiiopenuc.results[0].uc
-        cres.ucresult["Incident.Close.UCount"] = payload.data.actor.account.aiicloseuc.results[0].uc
+        cres.ucresult["Metadata.Dashboard.Count"]  = payload.data.actor.dbcount.count
+        cres.ucresult["Metadata.InfraAgent.Count"] = payload.data.actor.iacount.count
+        cres.ucresult["InfraAgent.UCount"]         = payload.data.actor.account.iauc.results[0].uc
+        cres.ucresult["Serverless.Lambda.UCount"]  = payload.data.actor.account.lambdauc.results[0].uc
+        cres.ucresult["Cloudwatch.Lambda.UCount"]  = payload.data.actor.account.lambdaciuc.results[0].uc
+        cres.ucresult["Cloudwatch.EC2.UCount"]     = payload.data.actor.account.ec2uc.results[0].uc
+        cres.ucresult["Incident.Open.UCount"]      = payload.data.actor.account.aiiopenuc.results[0].uc
+        cres.ucresult["Incident.Close.UCount"]     = payload.data.actor.account.aiicloseuc.results[0].uc
         cres.ucresult["CloudIntegrations.LinkedAccounts.Count"] = payload.data.actor.account.cloud.linkedAccounts.length
         var nServices = 0
         payload.data.actor.account.cloud.linkedAccounts.forEach( el => {
@@ -209,7 +226,9 @@ function ProcessMasterContext(sMasterCred, nBatchID, sTargetTable){
   }).then((aCounts)=>{
     var uCounts = []
     aCounts.forEach(el => {uCounts.push(el.ucresult)})
-    return PostEvents($secure.POA_INGEST_KEY,$secure.POA_ACCOUNT_ID,sTargetTable,nBatchID,uCounts)
+    return zippayload(sTargetTable,nBatchID,uCounts)
+  }).then((zp) => {
+    return PostZipEvents($secure.POA_INGEST_KEY,$secure.POA_ACCOUNT_ID,zp)
     .then((response1)=>{
       logit('main','postevents-response1',response1.statusCode)
     })
