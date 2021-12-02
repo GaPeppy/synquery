@@ -89,6 +89,9 @@ function GetCounts(sCred,oAcct,nBatchID){
     dbcount: entitySearch(query: "type = 'DASHBOARD' and accountId = 'RPMID'") {
       count
     }
+    iacount: entitySearch(query: "type = 'HOST' and accountId = 'RPMID'") {
+      count
+    }
     account(id: RPMID) {
       lambdauc: nrql(query: "SELECT uniqueCount(entityGuid) as uc FROM AwsLambdaInvocation WHERE provider = 'LambdaFunction' SINCE 1 day ago") {
         results
@@ -139,6 +142,7 @@ function GetCounts(sCred,oAcct,nBatchID){
         var cres = {}
         cres.ucresult = {NrAccountId:oAcct.id, NrAccountName:oAcct.name, ReportingPeriod:'1d', BatchId:nBatchID.toString()}
         cres.ucresult["Dashboard.Count"] = payload.data.actor.dbcount.count
+        cres.ucresult["InfraAgent.Count"] = payload.data.actor.iacount.count
         cres.ucresult["Serverless.Lambda.UCount"] = payload.data.actor.account.lambdauc.results[0].uc
         cres.ucresult["Cloudwatch.Lambda.UCount"] = payload.data.actor.account.lambdaciuc.results[0].uc
         cres.ucresult["Cloudwatch.EC2.UCount"] = payload.data.actor.account.ec2uc.results[0].uc
