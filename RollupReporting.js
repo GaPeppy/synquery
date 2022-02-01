@@ -124,6 +124,9 @@ function GetCounts(sCred,oAcct,nBatchID){
       aiicloseuc: nrql(query: "SELECT uniqueCount(incidentId) as uc from NrAiIncident where event = 'close' since 1 day ago") {
         results
       }
+      showeventtypes: nrql(query: "show eventtypes since 1 day ago") {
+        results
+      }
       cloud {
         linkedAccounts {
           createdAt
@@ -165,6 +168,7 @@ function GetCounts(sCred,oAcct,nBatchID){
         cres.ucresult["Cloudwatch.EC2.UCount"]     = payload.data.actor.account.ec2uc.results[0].uc
         cres.ucresult["Incident.Open.UCount"]      = payload.data.actor.account.aiiopenuc.results[0].uc
         cres.ucresult["Incident.Close.UCount"]     = payload.data.actor.account.aiicloseuc.results[0].uc
+        cres.ucresult["Show.EventTypes.Count"]     = payload.data.actor.account.showeventtypes.results.length
         cres.ucresult["CloudIntegrations.LinkedAccounts.Count"] = payload.data.actor.account.cloud.linkedAccounts.length
         var nServices = 0
         payload.data.actor.account.cloud.linkedAccounts.forEach( el => {
