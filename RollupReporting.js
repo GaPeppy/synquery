@@ -96,7 +96,8 @@ function GetAccounts(sCred){
 // GetCounts() -> run parallel queries for a target subaccount
 //
 function GetCounts(sCred,oAcct,nBatchID){
-    const CQuery = `
+  const METHODNAME = 'GetCounts'
+  const CQuery = `
 {
   actor {
     dbcount: entitySearch(query: "type = 'DASHBOARD' and accountId = 'RPMID'") {
@@ -115,6 +116,9 @@ function GetCounts(sCred,oAcct,nBatchID){
       ec2uc: nrql(query: "SELECT uniqueCount(entityGuid) as uc FROM ComputeSample WHERE provider = 'Ec2Instance' SINCE 1 day ago") {
         results
       }
+      k8snodeuc: nrql(query: "FROM K8sNodeSample SELECT uniqueCount(hostname) as uc SINCE 1 day ago") {
+        results
+      }
       iauc: nrql(query: "SELECT uniqueCount(entityGuid) as uc FROM SystemSample SINCE 1 day ago") {
         results
       }
@@ -122,6 +126,9 @@ function GetCounts(sCred,oAcct,nBatchID){
         results
       }
       aiicloseuc: nrql(query: "SELECT uniqueCount(incidentId) as uc from NrAiIncident where event = 'close' since 1 day ago") {
+        results
+      }
+      peakdailydpm: nrql(query: "select max(AccountDPM) as peakdailydpm from (FROM Metric select rate(sum(newrelic.resourceConsumption.currentValue), 1 minute) as AccountDPM  where limitName ='Metric API data points per minute (DPM)' and limitTimeInterval =  '1 minute' timeseries 30 minutes ) since 1 day ago") {
         results
       }
       showeventtypes: nrql(query: "show eventtypes since 1 day ago") {
@@ -163,11 +170,13 @@ function GetCounts(sCred,oAcct,nBatchID){
         cres.ucresult["Metadata.Dashboard.Count"]  = payload.data.actor.dbcount.count
         cres.ucresult["Metadata.InfraAgent.Count"] = payload.data.actor.iacount.count
         cres.ucresult["InfraAgent.UCount"]         = payload.data.actor.account.iauc.results[0].uc
+        cres.ucresult["InfraAgent.K8sNode.UCount"] = payload.data.actor.account.k8snodeuc.results[0].uc
         cres.ucresult["Serverless.Lambda.UCount"]  = payload.data.actor.account.lambdauc.results[0].uc
         cres.ucresult["Cloudwatch.Lambda.UCount"]  = payload.data.actor.account.lambdaciuc.results[0].uc
         cres.ucresult["Cloudwatch.EC2.UCount"]     = payload.data.actor.account.ec2uc.results[0].uc
         cres.ucresult["Incident.Open.UCount"]      = payload.data.actor.account.aiiopenuc.results[0].uc
         cres.ucresult["Incident.Close.UCount"]     = payload.data.actor.account.aiicloseuc.results[0].uc
+        cres.ucresult["Metric.PeakDPM"]            = payload.data.actor.account.peakdailydpm.results[0].peakdailydpm
         cres.ucresult["Show.EventTypes.Count"]     = payload.data.actor.account.showeventtypes.results.length
         cres.ucresult["CloudIntegrations.LinkedAccounts.Count"] = payload.data.actor.account.cloud.linkedAccounts.length
         var nServices = 0
@@ -182,6 +191,7 @@ function GetCounts(sCred,oAcct,nBatchID){
         })
         cres.ucresult["CloudIntegrations.Services.Count"] = nServices
 
+        //logit(METHODNAME,'debug cres',cres)
         return resolve(cres)
       }
       catch (e) {
