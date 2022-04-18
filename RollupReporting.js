@@ -108,31 +108,31 @@ function GetCounts1(sCred,oAcct,nBatchID, oResult){
       count
     }
     account(id: RPMID) {
-      lambdauc: nrql(query: "SELECT uniqueCount(entityGuid) as uc FROM AwsLambdaInvocation WHERE provider = 'LambdaFunction' SINCE 1 day ago") {
+      lambdauc: nrql(timeout: 20, query: "SELECT uniqueCount(entityGuid) as uc FROM AwsLambdaInvocation WHERE provider = 'LambdaFunction' SINCE 1 day ago") {
         results
       }
-      lambdaciuc: nrql(query: "SELECT uniqueCount(entityGuid) as uc from ServerlessSample where provider = 'LambdaFunction' SINCE 1 day ago") {
+      lambdaciuc: nrql(timeout: 20, query: "SELECT uniqueCount(entityGuid) as uc from ServerlessSample where provider = 'LambdaFunction' SINCE 1 day ago") {
         results
       }
-      ec2uc: nrql(query: "SELECT uniqueCount(entityGuid) as uc FROM ComputeSample WHERE provider = 'Ec2Instance' SINCE 1 day ago") {
+      ec2uc: nrql(timeout: 20, query: "SELECT uniqueCount(entityGuid) as uc FROM ComputeSample WHERE provider = 'Ec2Instance' SINCE 1 day ago") {
         results
       }
-      k8snodeuc: nrql(query: "FROM K8sNodeSample SELECT uniqueCount(entityGuid) as uc SINCE 1 day ago") {
+      k8snodeuc: nrql(timeout: 20, query: "FROM K8sNodeSample SELECT uniqueCount(entityGuid) as uc SINCE 1 day ago") {
         results
       }
-      iauc: nrql(query: "SELECT uniqueCount(entityGuid) as uc FROM SystemSample SINCE 1 day ago") {
+      iauc: nrql(timeout: 20, query: "SELECT uniqueCount(entityGuid) as uc FROM SystemSample SINCE 1 day ago") {
         results
       }
-      aiiopenuc: nrql(query: "SELECT uniqueCount(incidentId) as uc from NrAiIncident where event = 'open' since 1 day ago") {
+      aiiopenuc: nrql(timeout: 20, query: "SELECT uniqueCount(incidentId) as uc from NrAiIncident where event = 'open' since 1 day ago") {
         results
       }
-      aiicloseuc: nrql(query: "SELECT uniqueCount(incidentId) as uc from NrAiIncident where event = 'close' since 1 day ago") {
+      aiicloseuc: nrql(timeout: 20, query: "SELECT uniqueCount(incidentId) as uc from NrAiIncident where event = 'close' since 1 day ago") {
         results
       }
-      peakdailydpm: nrql(query: "select max(AccountDPM) as peakdailydpm from (FROM Metric select rate(sum(newrelic.resourceConsumption.currentValue), 1 minute) as AccountDPM  where limitName ='Metric API data points per minute (DPM)' and limitTimeInterval =  '1 minute' timeseries 30 minutes ) since 1 day ago") {
+      peakdailydpm: nrql(timeout: 20, query: "select max(AccountDPM) as peakdailydpm from (FROM Metric select rate(sum(newrelic.resourceConsumption.currentValue), 1 minute) as AccountDPM  where limitName ='Metric API data points per minute (DPM)' and limitTimeInterval =  '1 minute' timeseries 30 minutes ) since 1 day ago") {
         results
       }
-      showeventtypes: nrql(query: "show eventtypes since 1 day ago") {
+      showeventtypes: nrql(timeout: 20, query: "show eventtypes since 1 day ago") {
         results
       }
       cloud {
