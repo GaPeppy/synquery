@@ -33,7 +33,7 @@ async function getTelemetry(sTargetAccountId, sTargetNRQLQuery, sTargetNerdGraph
   if(resp.errors && resp.errors.count > 0){
     assert.failed(`getTelemetry()->nerdgraph failed with response [[[${resp.errors[0].message}]]]`)
   }
-  console.log('exiting')
+
   return resp.data.actor.account.nrql.results
 }
 
