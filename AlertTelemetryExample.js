@@ -41,6 +41,8 @@ async function main(sTargetAccountId, sTargetNRQLQuery, sTargetNerdGraphQuery, n
   var opayload = await getTelemetry(sTargetAccountId, sTargetNRQLQuery, sTargetNerdGraphQuery)
   //debug logging
   console.log('nrql results',opayload[0].avg,nThresh,opayload)
+
+  //Now test the NRQL Results against the intended threshold and assert failure if neccessary
   assert(opayload[0].avg < nThresh, `average cpu of [${opayload[0].avg}] exceeded threshold of [${nThresh}]`)
 }
 
